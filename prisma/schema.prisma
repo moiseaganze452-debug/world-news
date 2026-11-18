@@ -1,0 +1,637 @@
+// ============================================================================
+// WORLD NEWS — Schéma de base de données
+// PostgreSQL + Prisma ORM
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// UTILISATEURS & PERMISSIONS (RBAC)
+// ============================================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  JOURNALIST
+  AUTHOR
+  MODERATOR
+  AD_MANAGER
+  ANALYST
+}
+
+enum UserStatus {
+  ACTIF
+  SUSPENDU
+  EN_ATTENTE
+}
+
+model User {
+  id                String     @id @default(uuid())
+  name              String
+  email             String     @unique
+  emailVerified     DateTime?
+  password          String? // hash bcrypt — null si connexion OAuth uniquement
+  image             String?
+  role              UserRole   @default(AUTHOR)
+  status            UserStatus @default(ACTIF)
+
+  // 2FA (préparé pour version future)
+  twoFactorEnabled  Boolean    @default(false)
+  twoFactorSecret   String?
+
+  // §8/§71 — invalidation de session : incrémenté à chaque changement de
+  // mot de passe ou révocation manuelle. Comparé à la valeur figée dans
+  // le JWT au moment de la connexion (voir lib/auth/config.ts callback
+  // session) ; si les valeurs diffèrent, la session JWT existante est
+  // considérée révoquée même si le JWT lui-même n'a pas expiré.
+  sessionVersion    Int        @default(0)
+
+  // Relations
+  author            Author?
+  articles          Article[]        @relation("ArticleCreatedBy")
+  comments          Comment[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  accounts          Account[]
+  sessions          Session[]
+  mediaUploaded     Media[]
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// Modèles requis par Auth.js (adapter Prisma)
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================================
+// AUTEURS / JOURNALISTES (profil éditorial public, distinct du compte User)
+// ============================================================================
+
+model Author {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slug            String   @unique
+  displayName     String
+  photo           String?
+  bio             String?  @db.Text
+  professionalEmail String?
+  position        String?  // ex: "Rédacteur en chef"
+  specialty       String?  // ex: "Politique internationale"
+
+  facebookUrl     String?
+  twitterUrl      String?
+  linkedinUrl     String?
+  instagramUrl    String?
+
+  articles        Article[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([slug])
+  @@map("authors")
+}
+
+// ============================================================================
+// ARTICLES
+// ============================================================================
+
+enum ArticleStatus {
+  BROUILLON
+  EN_RELECTURE
+  PROGRAMME
+  PUBLIE
+  ARCHIVE
+}
+
+model Article {
+  id               String        @id @default(uuid())
+  title            String
+  slug             String        @unique
+  excerpt          String?       @db.Text
+  content          String        @db.Text // JSON riche (blocs éditeur)
+
+  coverImageId     String?
+  coverImage       Media?        @relation("ArticleCoverImage", fields: [coverImageId], references: [id])
+  gallery          Media[]       @relation("ArticleGallery")
+  videoUrl         String?
+
+  authorId         String
+  author           Author        @relation(fields: [authorId], references: [id])
+
+  createdById      String
+  createdBy        User          @relation("ArticleCreatedBy", fields: [createdById], references: [id])
+
+  categoryId       String
+  category         Category      @relation("CategoryArticles", fields: [categoryId], references: [id])
+  subCategoryId    String?
+  subCategory      Category?     @relation("SubCategoryArticles", fields: [subCategoryId], references: [id])
+
+  tags             Tag[]         @relation("ArticleTags")
+
+  location         String?
+  source           String?
+
+  status           ArticleStatus @default(BROUILLON)
+  publishedAt      DateTime?
+  scheduledAt      DateTime?
+
+  isFeatured       Boolean       @default(false) // à la une
+  isTrending       Boolean       @default(false) // tendance
+  isSponsored      Boolean       @default(false) // sponsorisé
+  isBreaking       Boolean       @default(false) // urgent
+
+  viewCount        Int           @default(0)
+  readingTimeMin    Int?          // calculé automatiquement à la publication
+
+  // SEO par article
+  seoTitle         String?
+  seoDescription   String?       @db.Text
+  ogImageId        String?
+  ogImage          Media?        @relation("ArticleOgImage", fields: [ogImageId], references: [id])
+  canonicalUrl     String?
+
+  comments         Comment[]
+  revisions        ArticleRevision[]
+  analyticsEvents  AnalyticsEvent[]
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("articles")
+}
+
+// Historique des modifications (versions) d'un article
+model ArticleRevision {
+  id         String   @id @default(uuid())
+  articleId  String
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  editedById String
+  createdAt  DateTime @default(now())
+
+  @@index([articleId])
+  @@map("article_revisions")
+}
+
+// ============================================================================
+// CATÉGORIES & TAGS
+// ============================================================================
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  color       String?    // couleur d'accent optionnelle
+  icon        String?
+  order       Int        @default(0)
+
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+
+  articles       Article[] @relation("CategoryArticles")
+  subArticles    Article[] @relation("SubCategoryArticles")
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([slug])
+  @@map("categories")
+}
+
+model Tag {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  slug     String    @unique
+  articles Article[] @relation("ArticleTags")
+
+  @@index([slug])
+  @@map("tags")
+}
+
+// ============================================================================
+// MÉDIAS
+// ============================================================================
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+model Media {
+  id           String    @id @default(uuid())
+  url          String
+  provider     String    // cloudinary | r2 | s3
+  providerKey  String?   // clé/chemin chez le fournisseur
+
+  filename     String
+  mimeType     String
+  type         MediaType
+  sizeBytes    Int
+  width        Int?
+  height       Int?
+
+  altText      String?
+  title        String?
+  description  String?   @db.Text
+  attribution  String?
+
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+
+  articlesCover   Article[] @relation("ArticleCoverImage")
+  articlesGallery Article[] @relation("ArticleGallery")
+  articlesOg      Article[] @relation("ArticleOgImage")
+
+  createdAt    DateTime  @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@map("media")
+}
+
+// ============================================================================
+// COMMENTAIRES
+// ============================================================================
+
+enum CommentStatus {
+  EN_ATTENTE
+  APPROUVE
+  REJETE
+  SIGNALE
+}
+
+model Comment {
+  id         String        @id @default(uuid())
+  content    String        @db.Text
+  status     CommentStatus @default(EN_ATTENTE)
+
+  articleId  String
+  article    Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  authorId   String?
+  author     User?         @relation(fields: [authorId], references: [id])
+
+  guestName  String?
+  guestEmail String?
+
+  parentId   String?
+  parent     Comment?      @relation("CommentReplies", fields: [parentId], references: [id])
+  replies    Comment[]     @relation("CommentReplies")
+
+  reportCount Int          @default(0)
+
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([articleId])
+  @@index([status])
+  @@map("comments")
+}
+
+// ============================================================================
+// PAGES PERSONNALISÉES
+// ============================================================================
+
+enum PageStatus {
+  BROUILLON
+  PUBLIE
+}
+
+model Page {
+  id             String     @id @default(uuid())
+  title          String
+  slug           String     @unique
+  content        String     @db.Text
+  status         PageStatus @default(BROUILLON)
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([slug])
+  @@map("pages")
+}
+
+// ============================================================================
+// MENUS
+// ============================================================================
+
+model Menu {
+  id        String     @id @default(uuid())
+  name      String     // ex: "Menu principal", "Footer - liens rapides"
+  slug      String     @unique
+  items     MenuItem[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("menus")
+}
+
+enum MenuItemType {
+  CATEGORIE
+  PAGE
+  ARTICLE
+  URL
+}
+
+model MenuItem {
+  id        String       @id @default(uuid())
+  menuId    String
+  menu      Menu         @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  label     String
+  type      MenuItemType
+  targetId  String?      // id de la catégorie/page/article ciblée
+  url       String?      // pour type = URL
+
+  order     Int          @default(0)
+
+  parentId  String?
+  parent    MenuItem?    @relation("MenuItemHierarchy", fields: [parentId], references: [id])
+  children  MenuItem[]   @relation("MenuItemHierarchy")
+
+  @@index([menuId])
+  @@map("menu_items")
+}
+
+// ============================================================================
+// PUBLICITÉS
+// ============================================================================
+
+enum AdPlacement {
+  HEADER
+  HOMEPAGE
+  ENTRE_ARTICLES
+  SIDEBAR
+  ARTICLE
+  FOOTER
+  MOBILE
+}
+
+enum AdStatus {
+  ACTIVE
+  INACTIVE
+  PROGRAMMEE
+  EXPIREE
+}
+
+model Advertisement {
+  id        String      @id @default(uuid())
+  name      String
+  placement AdPlacement
+  imageId   String?
+  imageUrl  String?
+  linkUrl   String?
+  htmlCode  String?     @db.Text
+  scriptCode String?    @db.Text
+
+  startDate DateTime?
+  endDate   DateTime?
+  status    AdStatus    @default(INACTIVE)
+
+  impressions Int       @default(0)
+  clicks      Int       @default(0)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([placement])
+  @@index([status])
+  @@map("advertisements")
+}
+
+// ============================================================================
+// NEWSLETTER
+// ============================================================================
+
+enum SubscriberStatus {
+  ACTIF
+  DESABONNE
+}
+
+model NewsletterSubscriber {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  status       SubscriberStatus  @default(ACTIF)
+  subscribedAt DateTime          @default(now())
+  unsubscribedAt DateTime?
+
+  @@index([status])
+  @@map("newsletter_subscribers")
+}
+
+enum CampaignStatus {
+  BROUILLON
+  PROGRAMMEE
+  ENVOYEE
+}
+
+model NewsletterCampaign {
+  id          String         @id @default(uuid())
+  subject     String
+  content     String         @db.Text
+  status      CampaignStatus @default(BROUILLON)
+  sentAt      DateTime?
+  scheduledAt DateTime?
+
+  recipientCount Int         @default(0)
+  openCount      Int         @default(0)
+  clickCount     Int         @default(0)
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("newsletter_campaigns")
+}
+
+// ============================================================================
+// NOTIFICATIONS (admin)
+// ============================================================================
+
+enum NotificationType {
+  NOUVEL_ARTICLE
+  COMMENTAIRE_A_MODERER
+  NOUVEL_ABONNE
+  ERREUR_SYSTEME
+  PUBLICATION_PROGRAMMEE
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean          @default(false)
+
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id])
+
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// ============================================================================
+// PARAMÈTRES / SETTINGS (clé-valeur, entièrement piloté par l'admin)
+// ============================================================================
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique // ex: "site.name", "colors.primary", "seo.title"
+  value     String   @db.Text
+  group     String   // identite | couleurs | typographie | layout | seo | ...
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+  @@map("settings")
+}
+
+model SocialLink {
+  id       String  @id @default(uuid())
+  platform String  @unique // facebook | x | instagram | tiktok | youtube | linkedin | whatsapp | telegram
+  url      String
+  enabled  Boolean @default(true)
+  order    Int     @default(0)
+
+  @@map("social_links")
+}
+
+model SeoSetting {
+  id                 String  @id @default(uuid())
+  globalTitle        String?
+  globalDescription  String? @db.Text
+  keywords           String?
+  ogImageUrl         String?
+  googleVerification String?
+  bingVerification   String?
+  analyticsId        String?
+  robotsConfig       String? @db.Text
+
+  updatedAt          DateTime @updatedAt
+
+  @@map("seo_settings")
+}
+
+// ============================================================================
+// ANALYTICS INTERNES
+// ============================================================================
+
+enum AnalyticsEventType {
+  PAGE_VIEW
+  ARTICLE_VIEW
+  SEARCH
+  NEWSLETTER_SIGNUP
+  AD_CLICK
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(uuid())
+  type      AnalyticsEventType
+  path      String?
+
+  articleId String?
+  article   Article?           @relation(fields: [articleId], references: [id])
+
+  country   String?
+  device    String?            // mobile | tablette | desktop
+  source    String?            // referrer / campagne
+
+  createdAt DateTime           @default(now())
+
+  @@index([type])
+  @@index([articleId])
+  @@index([createdAt])
+  @@map("analytics_events")
+}
+
+// ============================================================================
+// AUDIT LOG (sécurité / traçabilité)
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+
+  action     String   // ex: "article.publish", "user.role_change", "auth.login"
+  resource   String?  // ex: "Article:uuid"
+  ipAddress  String?
+  metadata   String?  @db.Text // JSON libre
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
