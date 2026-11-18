@@ -1,2 +1,2 @@
-# wold-news
-Wold News - Actualités internationales
+# world-news
+World News - Actualités internationales
