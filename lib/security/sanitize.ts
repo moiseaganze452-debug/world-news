@@ -49,7 +49,6 @@ export function sanitizeArticleHtml(html: string): string {
     ADD_URI_SAFE_ATTR: [],
     // Empêche javascript:/data: dans href/src
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
-    hooks: {},
   }).replace(/<iframe(?![^>]*\ssrc=["']https:\/\/(www\.)?(youtube(-nocookie)?\.com|player\.vimeo\.com)\/)[^>]*>.*?<\/iframe>/gi, "");
 }
 
