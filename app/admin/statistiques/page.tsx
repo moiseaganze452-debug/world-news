@@ -4,6 +4,7 @@ import {
   getGlobalStats,
 } from "@/services/analytics-service";
 import { StatCard } from "@/components/admin/stat-card";
+import { Eye, FileText, MessageSquare, Users, Megaphone, MousePointer } from "lucide-react";
 import { PopularCategoriesChart } from "@/components/admin/popular-categories-chart";
 
 export const metadata = { title: "Statistiques" };
@@ -23,15 +24,15 @@ export default async function StatisticsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Vues totales" value={stats.totalViews.toLocaleString("fr-FR")} />
-        <StatCard label="Articles publiés" value={stats.totalArticles.toString()} />
-        <StatCard label="Commentaires approuvés" value={stats.totalComments.toString()} />
-        <StatCard label="Abonnés newsletter" value={stats.totalSubscribers.toString()} />
+        <StatCard icon={Eye} label="Vues totales" value={stats.totalViews.toLocaleString("fr-FR")} />
+        <StatCard icon={FileText} label="Articles publiés" value={stats.totalArticles.toString()} />
+        <StatCard icon={MessageSquare} label="Commentaires approuvés" value={stats.totalComments.toString()} />
+        <StatCard icon={Users} label="Abonnés newsletter" value={stats.totalSubscribers.toString()} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <StatCard label="Impressions publicitaires" value={stats.totalAdImpressions.toLocaleString("fr-FR")} />
-        <StatCard label="Clics publicitaires" value={stats.totalAdClicks.toLocaleString("fr-FR")} />
+        <StatCard icon={Megaphone} label="Impressions publicitaires" value={stats.totalAdImpressions.toLocaleString("fr-FR")} />
+        <StatCard icon={MousePointer} label="Clics publicitaires" value={stats.totalAdClicks.toLocaleString("fr-FR")} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
