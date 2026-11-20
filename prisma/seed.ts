@@ -57,7 +57,7 @@ async function main() {
   // --- Catégories -------------------------------------------------------------
   const categories = [];
   for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
-    const name = DEFAULT_CATEGORIES[i];
+    const name = DEFAULT_CATEGORIES[i]!;
     const category = await prisma.category.upsert({
       where: { slug: toSlug(name) },
       update: {},
@@ -138,10 +138,10 @@ async function main() {
 
   let createdCount = 0;
   for (let i = 0; i < articleTitles.length; i++) {
-    const title = articleTitles[i];
+    const title = articleTitles[i]!;
     const slug = toSlug(title);
-    const author = authors[i % authors.length];
-    const category = categories[i % categories.length];
+    const author = authors[i % authors.length]!;
+    const category = categories[i % categories.length]!;
     const isPublished = i < 12; // 12 publiés, 3 en brouillon/programmé
 
     const existing = await prisma.article.findUnique({ where: { slug } });
@@ -171,7 +171,7 @@ async function main() {
         readingTimeMin: 3 + (i % 5),
         viewCount: Math.floor(Math.random() * 5000),
         tags: {
-          connect: [{ id: tags[i % tags.length].id }, { id: tags[(i + 1) % tags.length].id }],
+          connect: [{ id: tags[i % tags.length]!.id }, { id: tags[(i + 1) % tags.length]!.id }],
         },
       },
     });
@@ -187,7 +187,7 @@ async function main() {
   });
 
   for (let i = 0; i < 6; i++) {
-    const category = categories[i];
+    const category = categories[i]!;
     const existingItem = await prisma.menuItem.findFirst({
       where: { menuId: mainMenu.id, targetId: category.id },
     });
@@ -219,9 +219,9 @@ async function main() {
 
   for (let i = 0; i < socialPlatforms.length; i++) {
     await prisma.socialLink.upsert({
-      where: { platform: socialPlatforms[i].platform },
+      where: { platform: socialPlatforms[i]!.platform },
       update: {},
-      create: { ...socialPlatforms[i], order: i, enabled: true },
+      create: { ...socialPlatforms[i]!, order: i, enabled: true },
     });
   }
   console.log("✅ Réseaux sociaux configurés");

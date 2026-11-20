@@ -6,9 +6,9 @@ export function hslToHex(hslString: string): string {
   const match = hslString.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/);
   if (!match) return "#000000";
 
-  const h = parseFloat(match[1]);
-  const s = parseFloat(match[2]) / 100;
-  const l = parseFloat(match[3]) / 100;
+  const h = parseFloat(match[1]!!);
+  const s = parseFloat(match[2]!!) / 100;
+  const l = parseFloat(match[3]!!) / 100;
 
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
