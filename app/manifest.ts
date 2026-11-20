@@ -13,8 +13,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     description: theme.identity.tagline,
     start_url: "/",
     display: "standalone",
-    background_color: toHslCss(theme.colors.background),
-    theme_color: toHslCss(theme.colors.primary),
+    background_color: toHslCss(theme.colors.background ?? "0 0% 100%"),
+    theme_color: toHslCss(theme.colors.primary ?? "213 63% 14%"),
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
