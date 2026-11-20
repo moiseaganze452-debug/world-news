@@ -14,7 +14,7 @@ import { prisma } from "@/lib/db/prisma";
  * personnalisées et respecter la règle « tout doit être modifiable sans code ».
  */
 export interface SiteTheme {
-  colors: Record<string, string>;
+  colors: { primary: string; secondary: string; accent: string; background: string; text: string; [key: string]: string; };
   identity: {
     siteName: string;
     tagline: string;
