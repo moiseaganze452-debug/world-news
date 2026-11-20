@@ -15,10 +15,10 @@ export function AppearanceForm({ theme }: { theme: SiteTheme }) {
   const [preview, setPreview] = useState({
     siteName: theme.identity.siteName,
     tagline: theme.identity.tagline,
-    primary: theme.colors.primary,
-    secondary: theme.colors.secondary,
-    background: theme.colors.background,
-    text: theme.colors.text,
+    primary: theme.colors.primary ?? "213 63% 14%",
+    secondary: theme.colors.secondary ?? "0 65% 47%",
+    background: theme.colors.background ?? "0 0% 100%",
+    text: theme.colors.text ?? "220 39% 11%",
   });
 
   return (
@@ -38,14 +38,14 @@ export function AppearanceForm({ theme }: { theme: SiteTheme }) {
         <fieldset className="space-y-4">
           <legend className="mb-2 text-sm font-semibold text-foreground">Couleurs</legend>
 
-          <ColorField label="Couleur principale" name="colorPrimary" hslValue={theme.colors.primary}
+          <ColorField label="Couleur principale" name="colorPrimary" hslValue={theme.colors.primary ?? "213 63% 14%"}
             onChange={(v) => setPreview((p) => ({ ...p, primary: v }))} />
-          <ColorField label="Couleur secondaire" name="colorSecondary" hslValue={theme.colors.secondary}
+          <ColorField label="Couleur secondaire" name="colorSecondary" hslValue={theme.colors.secondary ?? "0 65% 47%"}
             onChange={(v) => setPreview((p) => ({ ...p, secondary: v }))} />
-          <ColorField label="Accent" name="colorAccent" hslValue={theme.colors.accent} />
-          <ColorField label="Arrière-plan" name="colorBackground" hslValue={theme.colors.background}
+          <ColorField label="Accent" name="colorAccent" hslValue={theme.colors.accent ?? "0 65% 47%"} />
+          <ColorField label="Arrière-plan" name="colorBackground" hslValue={theme.colors.background ?? "0 0% 100%"}
             onChange={(v) => setPreview((p) => ({ ...p, background: v }))} />
-          <ColorField label="Texte" name="colorText" hslValue={theme.colors.text}
+          <ColorField label="Texte" name="colorText" hslValue={theme.colors.text ?? "220 39% 11%"}
             onChange={(v) => setPreview((p) => ({ ...p, text: v }))} />
         </fieldset>
 
